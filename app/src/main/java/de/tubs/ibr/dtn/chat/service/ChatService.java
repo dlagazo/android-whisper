@@ -23,18 +23,26 @@ package de.tubs.ibr.dtn.chat.service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.Date;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.StringTokenizer;
 
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
 import android.database.Cursor;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbDeviceConnection;
+import android.hardware.usb.UsbManager;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Binder;
@@ -44,12 +52,18 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
+import android.os.Vibrator;
 import android.preference.PreferenceManager;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.NotificationCompat.WearableExtender;
 import android.support.v4.app.RemoteInput;
 import android.support.v4.app.TaskStackBuilder;
 import android.util.Log;
+import android.widget.Toast;
+
+import com.felhr.usbserial.UsbSerialDevice;
+import com.felhr.usbserial.UsbSerialInterface;
+
 import de.tubs.ibr.dtn.api.Block;
 import de.tubs.ibr.dtn.api.Bundle;
 import de.tubs.ibr.dtn.api.Bundle.ProcFlags;
@@ -124,6 +138,12 @@ public class ChatService extends DTNIntentService {
 	// handler for scheduled refreshes
 	private UpdateHandler mUpdateHandler = null;
 	private HandlerThread mUpdateThread = null;
+
+	private static String ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION";
+	String data = "";
+	UsbManager manager;
+	UsbSerialDevice serialPort;
+	Handler handler;
 	
 	public ChatService() {
 		super(TAG);
@@ -311,7 +331,13 @@ public class ChatService extends DTNIntentService {
 			
 			// create a notification
 			createNotification(b, msg);
-			
+			Toast.makeText(getApplicationContext(), "(" + msg.getCreated() + ")" +
+					msg.getBuddyId() + ": " + msg.getPayload(), Toast.LENGTH_SHORT).show();
+
+			String raw = "(" + msg.getCreated() + ")" +
+					msg.getBuddyId() + ": " + msg.getPayload() + "\n";
+			serialPort.write(raw.getBytes());
+
 			// create a status bar notification
 			Log.i(TAG, "New message received!");
 		}
@@ -380,10 +406,136 @@ public class ChatService extends DTNIntentService {
 			
 			Log.d(TAG, "scheduled update for " + b.getEndpoint());
 		}
-		
+
+		manager = (UsbManager) getApplicationContext().getSystemService(Context.USB_SERVICE);
+		Map<String, UsbDevice> devices = manager.getDeviceList();
+		try{
+			UsbDevice device = (UsbDevice)devices.values().toArray()[0];
+			//attempt to invoke virtual method USBDeviceConnection claimInterface
+			PendingIntent mPermissionIntent = PendingIntent.getBroadcast(this, 0, new Intent(
+					ACTION_USB_PERMISSION), 0);
+			IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
+			registerReceiver(new UsbReceiver(), filter);
+
+
+			manager.requestPermission(device, mPermissionIntent);
+			boolean hasPermision = manager.hasPermission(device);
+
+
+		}
+		catch(Exception ex)
+		{
+			Toast.makeText(getApplicationContext(), ex.toString(), Toast.LENGTH_LONG).show();
+		}
+
+
 		Log.i(TAG, "service created.");
+
+
 	}
-	
+
+	class UsbReceiver extends BroadcastReceiver
+	{
+		private void runOnUiThread(Runnable runnable) {
+			handler.post(runnable);
+		}
+
+		@Override
+		public void onReceive(final Context context, Intent intent)
+		{
+			String action = intent.getAction();
+			if (ACTION_USB_PERMISSION.contains(action))
+			{
+
+
+				UsbDevice device = (UsbDevice)intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+
+				if (intent.getBooleanExtra(
+						UsbManager.EXTRA_PERMISSION_GRANTED, false))
+				{
+					if (device != null)
+					{
+						// call method to set up device communication
+						UsbDeviceConnection connection = manager.openDevice(device);
+
+
+
+						serialPort = UsbSerialDevice.createUsbSerialDevice(device, connection);
+						//Toast.makeText(getApplicationContext(), device.getDeviceName(), Toast.LENGTH_LONG).show();
+
+
+						if(serialPort != null)
+						{
+
+							if(serialPort.open())
+							{
+								UsbSerialInterface.UsbReadCallback mCallback = new UsbSerialInterface.UsbReadCallback() {
+									//Defining a Callback which triggers whenever data is read.
+									@Override
+									public void onReceivedData(byte[] arg0) {
+
+
+
+										try {
+											data += new String(arg0, "UTF8");
+
+											if(data.contains("."))
+											{
+												Vibrator v = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+												// Vibrate for 500 milliseconds
+												v.vibrate(500);
+												Handler handler = new Handler(Looper.getMainLooper());
+
+
+												handler.post(new Runnable() {
+													@Override
+													public void run() {
+														Toast.makeText(getApplicationContext(), "HQ: " + data, Toast.LENGTH_LONG).show();
+
+													}
+												});
+												data = "";
+											}
+
+										} catch (UnsupportedEncodingException e) {
+											e.printStackTrace();
+										}
+										//data.concat(arg0.toString());
+
+
+
+
+
+									}
+								};
+
+								serialPort.setBaudRate(57600);
+								serialPort.setDataBits(UsbSerialInterface.DATA_BITS_8);
+								serialPort.setStopBits(UsbSerialInterface.STOP_BITS_1);
+								serialPort.setParity(UsbSerialInterface.PARITY_NONE);
+								serialPort.setFlowControl(UsbSerialInterface.FLOW_CONTROL_OFF);
+								serialPort.write(("Device ready \n" ).getBytes());
+								//serialPort.close();
+								serialPort.read(mCallback); //
+								//Toast.makeText(getApplicationContext(),"Wrote to " + device.getDeviceName(), Toast.LENGTH_LONG).show();
+
+
+
+							}
+						}
+
+					}
+				}
+				else
+				{
+
+				}
+
+			}
+		}
+	}
+
+
 	private SharedPreferences.OnSharedPreferenceChangeListener mPrefListener = new SharedPreferences.OnSharedPreferenceChangeListener() {
 		@Override
 		public void onSharedPreferenceChanged(SharedPreferences prefs, String key) {
@@ -641,6 +793,13 @@ public class ChatService extends DTNIntentService {
 			if (buddyId < 0) return;
 			
 			actionSendMessage(buddyId, text);
+			try{
+				serialPort.write(("Hotspot:" + text + "\n").getBytes());
+
+			}
+			catch (Exception e) {
+
+			}
 		}
 		else if (ACTION_REFRESH_PRESENCE.equals(action))
 		{
