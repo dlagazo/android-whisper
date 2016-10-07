@@ -1,5 +1,6 @@
 package de.tubs.ibr.dtn.chat;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -10,15 +11,28 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.IntentSender.SendIntentException;
 import android.content.ServiceConnection;
+import android.graphics.Bitmap;
+import android.location.Criteria;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.Looper;
 import android.support.v4.app.Fragment;
+import android.util.Base64;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+
+import java.io.ByteArrayOutputStream;
+import java.util.Calendar;
+
 import de.tubs.ibr.dtn.SecurityService;
 import de.tubs.ibr.dtn.SecurityUtils;
 import de.tubs.ibr.dtn.Services;
@@ -27,7 +41,7 @@ import de.tubs.ibr.dtn.chat.core.Buddy;
 import de.tubs.ibr.dtn.chat.service.ChatService;
 import de.tubs.ibr.dtn.chat.service.Utils;
 
-public class MessageFragment extends Fragment {
+public class MessageFragment extends Fragment implements LocationListener {
 	
 	private static final int MESSAGE_LOADER_ID = 1;
 	private static final int BUDDY_LOADER_ID = 2;
@@ -116,7 +130,7 @@ public class MessageFragment extends Fragment {
 	@Override
 	public void onActivityCreated(Bundle savedInstanceState) {
 		super.onActivityCreated(savedInstanceState);
-		
+
 		// enable options menu
 		setHasOptionsMenu(true);
 		
@@ -134,11 +148,61 @@ public class MessageFragment extends Fragment {
 			
 			@Override
 			public void onSend(String message) {
+
+				final LocationListener locationListener = new LocationListener() {
+					@Override
+					public void onLocationChanged(Location location) {
+						loc = location;
+						Log.d("Location Changes", location.toString());
+
+					}
+
+					@Override
+					public void onStatusChanged(String provider, int status, Bundle extras) {
+						Log.d("Status Changed", String.valueOf(status));
+					}
+
+					@Override
+					public void onProviderEnabled(String provider) {
+						Log.d("Provider Enabled", provider);
+					}
+
+					@Override
+					public void onProviderDisabled(String provider) {
+						Log.d("Provider Disabled", provider);
+					}
+				};
+
+				// Now first make a criteria with your requirements
+				// this is done to save the battery life of the device
+				// there are various other other criteria you can search for..
+				Criteria criteria = new Criteria();
+				criteria.setAccuracy(Criteria.ACCURACY_COARSE);
+				criteria.setPowerRequirement(Criteria.POWER_LOW);
+				criteria.setAltitudeRequired(false);
+				criteria.setBearingRequired(false);
+				criteria.setSpeedRequired(false);
+				criteria.setCostAllowed(true);
+				criteria.setHorizontalAccuracy(Criteria.ACCURACY_HIGH);
+				criteria.setVerticalAccuracy(Criteria.ACCURACY_HIGH);
+
+				// Now create a location manager
+				LocationManager locationManager = (LocationManager)  getContext().getSystemService(Context.LOCATION_SERVICE);
+
+				// This is the Best And IMPORTANT part
+				Looper looper = null;
+				locationManager.requestSingleUpdate(criteria, locationListener, looper);
+
+
+						//Intent takePic = new Intent("android.media.action.IMAGE_CAPTURE");
+				//startActivityForResult(takePic, 0);
+
 				final Intent intent = new Intent(getActivity(), ChatService.class);
 				intent.setAction(ChatService.ACTION_SEND_MESSAGE);
 				intent.putExtra(ChatService.EXTRA_BUDDY_ID, mBuddyId);
-				intent.putExtra(ChatService.EXTRA_TEXT_BODY, message);
+				intent.putExtra(ChatService.EXTRA_TEXT_BODY, message + ";" + loc.getLatitude() + "," + loc.getLongitude());
 				getActivity().startService(intent);
+				Log.d("isif", "Message sent");
 			}
 			
 			@Override
@@ -146,6 +210,26 @@ public class MessageFragment extends Fragment {
 				openSecurityInfoWindow();
 			}
 		});
+	}
+
+	private Uri imageUri;
+	private String encoded = "@";
+
+	@Override
+	public void onActivityResult(int requestCode, int resultCode, Intent data) {
+		super.onActivityResult(requestCode, resultCode, data);
+
+			Bitmap imageBitmap = (Bitmap) data.getExtras().get("data");
+
+			ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+			imageBitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
+			byte[] byteArray = byteArrayOutputStream .toByteArray();
+			encoded = Base64.encodeToString(byteArray, Base64.DEFAULT);
+
+
+		Log.d("isif", encoded + " width:" +
+					String.valueOf(imageBitmap.getWidth()) + " height:" +
+					String.valueOf(imageBitmap.getHeight()));
 	}
 	
 	private void restoreDraftMessage() {
@@ -255,7 +339,15 @@ public class MessageFragment extends Fragment {
 
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
+
 		super.onCreate(savedInstanceState);
+		loc = new Location("");
+		mLocationManager = (LocationManager) getContext().getSystemService(Context.LOCATION_SERVICE);
+
+		loc = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+
+			mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
+
 	}
 
 	@Override
@@ -355,5 +447,33 @@ public class MessageFragment extends Fragment {
 				// intent error
 			}
 		}
+	}
+
+	LocationManager mLocationManager;
+	Location loc;
+
+	@Override
+	public void onLocationChanged(Location location) {
+		if (location != null) {
+			loc.setLatitude(location.getLatitude());
+			loc.setLongitude(location.getLongitude());
+			Log.v("Location Changed", location.getLatitude() + " and " + location.getLongitude());
+			//mLocationManager.removeUpdates(this);
+		}
+	}
+
+	@Override
+	public void onStatusChanged(String provider, int status, Bundle extras) {
+
+	}
+
+	@Override
+	public void onProviderEnabled(String provider) {
+
+	}
+
+	@Override
+	public void onProviderDisabled(String provider) {
+
 	}
 }

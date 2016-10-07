@@ -52,6 +52,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.os.Vibrator;
 import android.preference.PreferenceManager;
 import android.support.v4.app.NotificationCompat;
@@ -332,11 +333,13 @@ public class ChatService extends DTNIntentService {
 			// create a notification
 			createNotification(b, msg);
 			Toast.makeText(getApplicationContext(), "(" + msg.getCreated() + ")" +
-					msg.getBuddyId() + ": " + msg.getPayload(), Toast.LENGTH_SHORT).show();
-
-			String raw = "(" + msg.getCreated() + ")" +
-					msg.getBuddyId() + ": " + msg.getPayload() + "\n";
-			serialPort.write(raw.getBytes());
+					source.toString() + ": " + msg.getPayload(), Toast.LENGTH_SHORT).show();
+			try {
+				String raw = msg.getCreated() + ";" +
+						source.toString() + ";" + msg.getPayload() + "\n";
+				serialPort.write(raw.getBytes());
+			}
+			catch(Exception e){}
 
 			// create a status bar notification
 			Log.i(TAG, "New message received!");
@@ -378,7 +381,9 @@ public class ChatService extends DTNIntentService {
 		// create registration
 		Registration registration = new Registration("chat");
 		registration.add(PRESENCE_GROUP_EID);
-		
+
+
+
 		try {
 			initialize(registration);
 			_service_error = ServiceError.NO_ERROR;
@@ -794,7 +799,13 @@ public class ChatService extends DTNIntentService {
 			
 			actionSendMessage(buddyId, text);
 			try{
-				serialPort.write(("Hotspot:" + text + "\n").getBytes());
+				Date dt = new Date();
+				int hours = dt.getHours();
+				int minutes = dt.getMinutes();
+				int seconds = dt.getSeconds();
+				String curTime = hours + ":" + minutes + ":" + seconds;
+				serialPort.write(("" + dt.toString() + ";" + getClient().getEndpoint()
+				+";" + text + "\n").getBytes());
 
 			}
 			catch (Exception e) {
