@@ -29,6 +29,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 import android.app.Notification;
 import android.app.NotificationManager;
@@ -711,6 +713,22 @@ public class ChatService extends DTNIntentService {
 		sendOrderedBroadcast(intent, null);
 	}
 
+	public static String getMD5EncryptedString(String encTarget){
+		MessageDigest mdEnc = null;
+		try {
+			mdEnc = MessageDigest.getInstance("MD5");
+		} catch (NoSuchAlgorithmException e) {
+			System.out.println("Exception while encrypting to md5");
+			e.printStackTrace();
+		} // Encryption algorithm
+		mdEnc.update(encTarget.getBytes(), 0, encTarget.length());
+		String md5 = new BigInteger(1, mdEnc.digest()).toString(16);
+		while ( md5.length() < 32 ) {
+			md5 = "0"+md5;
+		}
+		return md5;
+	}
+
 	@Override
 	protected void onHandleIntent(Intent intent) {
 		// stop processing if the session is not assigned
@@ -796,20 +814,26 @@ public class ChatService extends DTNIntentService {
 			
 			// abort if there is no buddyId
 			if (buddyId < 0) return;
-			
 			actionSendMessage(buddyId, text);
-			try{
-				Date dt = new Date();
-				int hours = dt.getHours();
-				int minutes = dt.getMinutes();
-				int seconds = dt.getSeconds();
-				String curTime = hours + ":" + minutes + ":" + seconds;
-				serialPort.write(("" + dt.toString() + ";" + getClient().getEndpoint()
-				+";" + text + "\n").getBytes());
 
-			}
-			catch (Exception e) {
+			//resends if ack checksum from HQ is not correct
+			boolean acknowledged = FALSE;
+			while (acknowledged = FALSE) {
+				try {
+					Date dt = new Date();
+					int hours = dt.getHours();
+					int minutes = dt.getMinutes();
+					int seconds = dt.getSeconds();
+					String curTime = hours + ":" + minutes + ":" + seconds;
+					String checksumTrue = getMD5EncryptedString(text);
+					serialPort.write(("" + dt.toString() + ";" + getClient().getEndpoint()
+							+ ";" + text + "\n").getBytes());
+				} catch (Exception e) {
 
+				}
+				//wait ack checksumReceived
+				if (checksumTrue.equals(checksumReceived)) 	acknowledged = TRUE;
+				//else wait();
 			}
 		}
 		else if (ACTION_REFRESH_PRESENCE.equals(action))
