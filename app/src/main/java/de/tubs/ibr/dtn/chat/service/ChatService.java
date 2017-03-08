@@ -329,14 +329,14 @@ public class ChatService extends DTNIntentService {
 			
 			// get buddy object
 			Buddy b = getRoster().getBuddy(msg.getBuddyId());
-			
+
 			// create a notification
 			createNotification(b, msg);
 			Toast.makeText(getApplicationContext(), "(" + msg.getCreated() + ")" +
-					source.toString() + ": " + msg.getPayload(), Toast.LENGTH_SHORT).show();
+					b.getEndpoint() + ": " + msg.getPayload(), Toast.LENGTH_SHORT).show();
 			try {
 				String raw = msg.getCreated() + ";" +
-						source.toString() + ";" + msg.getPayload() + "\n";
+						b.getEndpoint() + ";" + msg.getPayload() + "\n";
 				serialPort.write(raw.getBytes());
 			}
 			catch(Exception e){}
@@ -499,6 +499,14 @@ public class ChatService extends DTNIntentService {
 
 													}
 												});
+
+												Cursor c = getRoster().queryOnlineBuddies();
+												RosterAdapter.ColumnsMap cmap = new RosterAdapter.ColumnsMap();
+												while (c.moveToNext()) {
+													Buddy b = new Buddy(getApplicationContext(), c, cmap);
+													actionSendMessage(b.getId(), data);
+												}
+
 												data = "";
 											}
 
