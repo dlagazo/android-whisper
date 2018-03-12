@@ -1,5 +1,6 @@
 package de.tubs.ibr.dtn.chat;
 
+import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -7,13 +8,16 @@ import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
+import android.provider.MediaStore;
 import android.support.v4.app.FragmentTransaction;
 import android.support.v4.app.ListFragment;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.Loader;
+import android.util.Base64;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
 import android.view.Menu;
@@ -23,6 +27,10 @@ import android.view.View;
 import android.widget.AdapterView;
 import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.ListView;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
 import de.tubs.ibr.dtn.chat.service.ChatService;
 import de.tubs.ibr.dtn.chat.service.Utils;
 
@@ -106,28 +114,53 @@ public class RosterFragment extends ListFragment implements LoaderManager.Loader
 	    
 	    case R.id.itemDebugNotification:
 	    	if (mService != null)
-				mService.startDebug(ChatService.Debug.NOTIFICATION);
+			{
+				Intent intent = new Intent(Intent.ACTION_PICK);
+				intent.setType("image/*");
+				startActivityForResult(intent, 212);
+
+			}
+
 	    	return true;
 	    	
 	    case R.id.itemDebugBuddyAdd:
 	    	if (mService != null)
-				mService.startDebug(ChatService.Debug.BUDDY_ADD);
+				mService.startDebug(ChatService.Debug.BUDDY_ADD, "");
 	    	return true;
 	    	
 	    case R.id.itemDebugSendPresence:
             if (mService != null)
-                mService.startDebug(ChatService.Debug.SEND_PRESENCE);
+                mService.startDebug(ChatService.Debug.SEND_PRESENCE, "");
 	        return true;
 	        
 	    case R.id.itemDebugUnregister:
             if (mService != null)
-                mService.startDebug(ChatService.Debug.UNREGISTER);
+                mService.startDebug(ChatService.Debug.UNREGISTER, "");
             getActivity().finish();
 	        return true;
     
 	    default:
 	        return super.onOptionsItemSelected(item);
 	    }
+	}
+
+	@Override
+	public void onActivityResult(int requestCode, int resultCode, Intent data) {
+		if (resultCode == Activity.RESULT_OK && requestCode == 212) {
+			//imageView.setImageBitmap(getPicture(data.getData()));
+			try {
+				Bitmap bitmap = MediaStore.Images.Media.getBitmap( getActivity().getContentResolver(), data.getData());
+				ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+				bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
+				byte[] byteArray = byteArrayOutputStream .toByteArray();
+				String encoded = Base64.encodeToString(byteArray, Base64.DEFAULT);
+
+				mService.startDebug(ChatService.Debug.NOTIFICATION, encoded);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+
+		}
 	}
 
 	@Override

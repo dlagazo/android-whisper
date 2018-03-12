@@ -200,7 +200,7 @@ public class MessageFragment extends Fragment implements LocationListener {
 				final Intent intent = new Intent(getActivity(), ChatService.class);
 				intent.setAction(ChatService.ACTION_SEND_MESSAGE);
 				intent.putExtra(ChatService.EXTRA_BUDDY_ID, mBuddyId);
-				intent.putExtra(ChatService.EXTRA_TEXT_BODY, message + ";" + loc.getLatitude() + "," + loc.getLongitude());
+				intent.putExtra(ChatService.EXTRA_TEXT_BODY, loc.getLatitude() + "," + loc.getLongitude() + ",'" + message + "'" + "MSG_END");
 				getActivity().startService(intent);
 				Log.d("isif", "Message sent");
 			}
@@ -358,6 +358,7 @@ public class MessageFragment extends Fragment implements LocationListener {
 			getLoaderManager().destroyLoader(MESSAGE_LOADER_ID);
 			getLoaderManager().destroyLoader(BUDDY_LOADER_ID);
 			mBound = false;
+
 		}
 		
 		super.onDestroy();

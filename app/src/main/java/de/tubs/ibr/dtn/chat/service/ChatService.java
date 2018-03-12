@@ -143,7 +143,7 @@ public class ChatService extends DTNIntentService {
 	private static String ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION";
 	String data = "";
 	UsbManager manager;
-	UsbSerialDevice serialPort;
+	public UsbSerialDevice serialPort;
 	Handler handler;
 	
 	public ChatService() {
@@ -527,7 +527,7 @@ public class ChatService extends DTNIntentService {
 								serialPort.setStopBits(UsbSerialInterface.STOP_BITS_1);
 								serialPort.setParity(UsbSerialInterface.PARITY_NONE);
 								serialPort.setFlowControl(UsbSerialInterface.FLOW_CONTROL_OFF);
-								serialPort.write(("Device ready \n" ).getBytes());
+								//serialPort.write(("Device ready \n" ).getBytes());
 								//serialPort.close();
 								serialPort.read(mCallback); //
 								//Toast.makeText(getApplicationContext(),"Wrote to " + device.getDeviceName(), Toast.LENGTH_LONG).show();
@@ -921,12 +921,14 @@ public class ChatService extends DTNIntentService {
 		}
 	}
 	
-	public void startDebug(Debug d) {
+	public void startDebug(Debug d, String image ) {
 		String debug_source = "dtn://debug/chat";
 		
 		switch (d) {
 		case NOTIFICATION:
-			// create a new message
+
+
+			/*
 			Long msgId = getRoster().createMessage(debug_source, new Date(), new Date(), true, "Hello World", 0L);
 			
 			// retrieve message object
@@ -937,6 +939,40 @@ public class ChatService extends DTNIntentService {
 			
 			// create a notification
 			createNotification(b, msg);
+			*/
+
+
+			//Toast.makeText(getApplicationContext(), image, Toast.LENGTH_SHORT).show();
+			int index = 0;
+
+			serialPort.write("data:image/jpeg;base64,".getBytes());
+
+			try {
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+			while(index < image.length())
+			{
+
+				if(index + 1000 < image.length())
+				{
+					serialPort.write(image.substring(index, index + 1000).getBytes());
+					index += 1000;
+				}
+				else{
+					serialPort.write(image.substring(index, image.length()-1).getBytes());
+					index += 1000;
+				}
+				try {
+					Thread.sleep(300);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+
+			serialPort.write("FTP_END".getBytes());
+
 			break;
 		case BUDDY_ADD:
 			getRoster().updatePresence(debug_source + "/" + String.valueOf((new Date()).getTime()), new Date(), "online", "Debug Buddy", "Hello World", "dtn://test/dtalkie", "en", "gb", 0L);
